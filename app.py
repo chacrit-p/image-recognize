@@ -1,8 +1,9 @@
-import tkinter as tk
-from tkinter import messagebox
-import numpy as np
-from tensorflow.keras.models import load_model
 import cv2
+import numpy as np
+import tkinter as tk
+from PIL import Image, ImageDraw
+from tensorflow.keras.models import load_model
+
 
 model = load_model("mnist_model.keras")
 
@@ -16,9 +17,12 @@ points = []
 
 
 def paint(event):
-    x1, y1 = (event.x - 1), (event.y - 1)
-    x2, y2 = (event.x + 1), (event.y + 1)
-    canvas.create_oval(x1, y1, x2, y2, fill="black", width=5)
+    if points:
+        x1, y1 = points[-1]
+        x2, y2 = event.x, event.y
+        canvas.create_line(
+            x1, y1, x2, y2, fill="black", width=15, smooth=True, capstyle="round"
+        )
     points.append((event.x, event.y))
 
 
@@ -31,23 +35,26 @@ def clear_canvas():
 
 
 def recognize_number():
-    canvas.postscript(file="temp_image.ps")
+    image = Image.new("RGB", (280, 280), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
 
-    img = cv2.imread("temp_image.ps", cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        messagebox.showerror("Error", "Unable to process the image")
-        return
+    for point in points:
+        x, y = point
+        size = 7
+        draw.ellipse([x - size, y - size, x + size, y + size], fill=(0, 0, 0))
 
-    img_resized = cv2.resize(img, (28, 28))  # ปรับขนาด
-    img_resized = cv2.threshold(img_resized, 127, 255, cv2.THRESH_BINARY)[
-        1
-    ]  # แปลงเป็นภาพขาวดำ
-    img_resized = img_resized / 255.0  # ทำให้ค่าอยู่ในช่วง 0-1
-    img_resized = np.reshape(img_resized, (1, 28, 28, 1))  # เพิ่มมิติสำหรับ input ของโมเดล
+    img = np.array(image.convert("L"))
+
+    _, img_resized = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
+
+    img_resized = cv2.resize(img_resized, (28, 28))
+
+    img_resized = img_resized / 255.0
+    img_resized = np.reshape(img_resized, (1, 28, 28, 1))
 
     prediction = model.predict(img_resized)
-    predicted_digit = np.argmax(prediction)  # ค่า index ที่มีความน่าจะเป็นสูงสุด
-    confidence = np.max(prediction) * 100  # ความมั่นใจเป็นเปอร์เซ็นต์
+    predicted_digit = np.argmax(prediction)
+    confidence = np.max(prediction) * 100
 
     result_label.config(text=f"Prediction: {predicted_digit} ({confidence:.2f}%)")
 
