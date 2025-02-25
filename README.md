@@ -1,3 +1,5 @@
+### require model kars
+
 #### git clone https://github.com/chacrit-p/image-recognize.git
 #### cd image-recognize
 #### python -m .venv
