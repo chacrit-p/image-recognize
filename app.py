@@ -1,71 +1,78 @@
-import cv2
-import numpy as np
 import tkinter as tk
-from PIL import Image, ImageDraw
+from tkinter import filedialog
 from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
+import numpy as np
+from PIL import Image, ImageTk
 
+# ฟังก์ชันในการโหลดโมเดล
+def load_fruit_model():
+    model = load_model('fruit_model.keras')
+    return model
 
-model = load_model("mnist_model.keras")
+# ฟังก์ชันในการประมวลผลภาพและทำนายผล
+def predict_image(model, img_path):
+    # โหลดและปรับขนาดรูปภาพให้เหมาะสมกับโมเดล (150x150)
+    img = image.load_img(img_path, target_size=(150, 150))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)  # เพิ่มมิติให้เป็น (1, 150, 150, 3)
+    img_array /= 255.0  # Normalize ข้อมูลให้อยู่ในช่วง [0, 1]
 
+    # ทำนายผล
+    predictions = model.predict(img_array)
+    classes = ['apple', 'banana', 'strawberry']
+    predicted_class = classes[np.argmax(predictions)]  # เลือกคลาสที่มีความน่าจะเป็นสูงสุด
+
+    # คำนวณความน่าจะเป็นของแต่ละคลาส
+    probabilities = predictions[0]
+    result = {classes[i]: f"{probabilities[i]*100:.2f}%" for i in range(len(classes))}
+
+    return predicted_class, result
+
+# ฟังก์ชันที่ใช้ในการเลือกไฟล์
+def browse_file():
+    filename = filedialog.askopenfilename(title="Select an Image", filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])
+    if filename:
+        # แสดงภาพที่เลือกใน GUI
+        img = Image.open(filename)
+        img = img.resize((300, 300))  # ปรับขนาดให้พอดีกับกรอบแสดง
+        img = ImageTk.PhotoImage(img)
+        panel.config(image=img)
+        panel.image = img
+
+        # ทำนายผล
+        predicted_class, result = predict_image(model, filename)
+        
+        # แสดงผลลัพธ์
+        result_label.config(text=f"Predicted: {predicted_class}")
+        
+        # แสดงเปอร์เซ็นต์ความน่าจะเป็นของแต่ละคลาส
+        result_text = "\n".join([f"{fruit}: {prob}" for fruit, prob in result.items()])
+        probability_label.config(text=result_text)
+
+# สร้าง GUI
 root = tk.Tk()
-root.title("Draw a Number")
+root.title("Fruit Image Classifier")
+root.geometry("500x600")  # ขนาดหน้าต่างที่เหมาะสม
 
-canvas = tk.Canvas(root, width=280, height=280, bg="white")
-canvas.pack()
+# โหลดโมเดล
+model = load_fruit_model()
 
-points = []
+# สร้างปุ่มและการแสดงผล
+browse_button = tk.Button(root, text="Select Image", command=browse_file, font=("Helvetica", 14), bg="#4CAF50", fg="white", relief="raised", bd=3)
+browse_button.pack(pady=20)
 
+# กรอบสำหรับแสดงภาพ
+panel = tk.Label(root)
+panel.pack(pady=10)
 
-def paint(event):
-    if points:
-        x1, y1 = points[-1]
-        x2, y2 = event.x, event.y
-        canvas.create_line(
-            x1, y1, x2, y2, fill="black", width=15, smooth=True, capstyle="round"
-        )
-    points.append((event.x, event.y))
+# ป้ายแสดงผลลัพธ์การทำนาย
+result_label = tk.Label(root, text="Predicted: ", font=("Helvetica", 16))
+result_label.pack(pady=10)
 
+# ป้ายแสดงเปอร์เซ็นต์ความน่าจะเป็น
+probability_label = tk.Label(root, text="", font=("Helvetica", 14), justify="left")
+probability_label.pack(pady=10)
 
-canvas.bind("<B1-Motion>", paint)
-
-
-def clear_canvas():
-    canvas.delete("all")
-    points.clear()
-
-
-def recognize_number():
-    image = Image.new("RGB", (280, 280), color=(255, 255, 255))
-    draw = ImageDraw.Draw(image)
-
-    for point in points:
-        x, y = point
-        size = 7
-        draw.ellipse([x - size, y - size, x + size, y + size], fill=(0, 0, 0))
-
-    img = np.array(image.convert("L"))
-
-    _, img_resized = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
-
-    img_resized = cv2.resize(img_resized, (28, 28))
-
-    img_resized = img_resized / 255.0
-    img_resized = np.reshape(img_resized, (1, 28, 28, 1))
-
-    prediction = model.predict(img_resized)
-    predicted_digit = np.argmax(prediction)
-    confidence = np.max(prediction) * 100
-
-    result_label.config(text=f"Prediction: {predicted_digit} ({confidence:.2f}%)")
-
-
-clear_button = tk.Button(root, text="Clear", command=clear_canvas)
-clear_button.pack()
-
-recognize_button = tk.Button(root, text="Recognize", command=recognize_number)
-recognize_button.pack()
-
-result_label = tk.Label(root, text="Prediction: ")
-result_label.pack()
-
+# เริ่มต้น GUI
 root.mainloop()
